@@ -27,25 +27,28 @@ class PlistCollector:
         output_dir.mkdir(exist_ok=True)
 
         for rule in self.rules:
-            file = rule['file']
-            file_path = root_path / file
-            if not file_path.exists():
-                logger.warning(f'File {file_path} does not exist')
+            file_pattern = rule['file']
+            matched_files = list(root_path.glob(file_pattern))
+            if not matched_files:
+                logger.warning(f'No files matching {file_pattern}')
                 continue
-            logger.info(f'Processing plist file: {file}')
 
-            with file_path.open('rb') as plist_file:
-                data = plistlib.load(plist_file)
+            for file_path in matched_files:
+                logger.info(f'Processing plist file: {file_path}')
 
-            yq_query = rule.get('yq_query')
-            if yq_query:
-                logger.info(f'Running yq query: {yq_query}')
-                with tempfile.NamedTemporaryFile(mode='w+', delete=False) as fp:
-                    yaml.dump(data, fp, sort_keys=True, indent=4)
-                    data = YQ(yq_query, fp.name).splitlines()
+                with file_path.open('rb') as plist_file:
+                    data = plistlib.load(plist_file)
 
-            output_path = output_dir / f'{file_path.name}.yaml'
-            with output_path.open('w') as output_file:
-                yaml.dump(data, output_file, sort_keys=True, indent=4)
+                yq_query = rule.get('yq_query')
+                if yq_query:
+                    logger.info(f'Running yq query: {yq_query}')
+                    with tempfile.NamedTemporaryFile(mode='w+', delete=False) as fp:
+                        yaml.dump(data, fp, sort_keys=True, indent=4)
+                        fp.flush()
+                        data = YQ(yq_query, fp.name).splitlines()
 
-            logger.info(f'Converted plist to YAML: {output_path}')
+                output_path = output_dir / f'{file_path.name}.yaml'
+                with output_path.open('w') as output_file:
+                    yaml.dump(data, output_file, sort_keys=True, indent=4)
+
+                logger.info(f'Converted plist to YAML: {output_path}')
